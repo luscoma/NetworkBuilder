@@ -1,0 +1,40 @@
+Version History
+------------------------------
+
+----------------------
+Version 2.0 - BETA
+----------------------
+- Script is now written in powershell with no external dependencies except the ad module
+- Password can now be changed on the fly
+- Users are now created disabled
+- All servers and paths are settable in script
+- Users will automatically expire at the end of the semester 
+- Comparison mode is implemented via WhatIf command, though it is currently untested and will fail when manipulating acls (since no directory is created)
+- Classes are now tombstoned when deleted by a student
+-- This means they will be removed from the class but the students work will remain for a given period (default is 7 days)
+-- At the end of the tombstone period the script will clear out the users folder
+- When moving between class sections a users work is now moved to the new section
+
+----------------------
+Version 1.5.2
+----------------------
+- File Parsing
+--	Fixed bug where first user in file was skipped due to a legacy header bug
+	This originated when I expected all files to be labeled with headers, this is no longer need nor the case so it was removed
+- Script Processing
+-- Fixed logic bug where inheritance fixed was not skipped when unchecked and skipped when checked
+- Internal
+-- Fixed cross-boundary thread access bug related to check boxes and e-mail address
+-- Fixed bug where if a processed script had been re-run on the same day it would attempt to rename it the same name and crash
+-- Fixed thread race bug where the e-mail failing would try to log to the log file that it was trying to send causing nasty failure
+-- Improved error handling when a settings file is invalid
+
+----------------------
+Version 1.5.1
+----------------------
+- Internals
+-- Added some cleaning up to the code and commenting, made some things less ghetto
+-- Changed the Progress Info to work off a Priority Enum so that it has more meaning when looking at it
+- Logging
+-- Logging has been changed to create a new log based on the day its run (no more 9K log file)
+-- Log file has option to be e-mailed at end of day

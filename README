@@ -1,1 +1,12 @@
-Should be easy, just load it into Powershell and go
+Network Builder 
+Powered By Powershell
+---------------------------------
+
+Description
+---------------------------------
+The network builder consumes an oit users file and populates the active directory and servers with the necessary users and groups
+
+Todo
+---------------------------------
+- Write Test Cases
+- Refactor Code for readability

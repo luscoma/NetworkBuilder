@@ -27,7 +27,7 @@ param(
         [Switch]$Compare                = $false,                       # Enables compare mode which does not cause any changes
                                                                         # NOTE: This will fail currently (I believe) due to Get-Acl and Set-ACL being attempted on a non-existant folder, this will be tested in the future
         [Switch]$Vebrose                = $false,                       # Enables the vebrose mode of logging
-	[Switch]$Debug			= $false			# Enables additional debugging messages
+    [Switch]$Debug          = $false            # Enables additional debugging messages
      )
 
 <#
@@ -68,6 +68,7 @@ $Majors = @{
     "PIND" = "INDD";
     "INDD" = "INDD";
     "GDES" = "INDD";
+    "PATG" = "INDD";
 
     # College of Architecture, Design, and Construction
     "CADC" = "CADC";
@@ -102,7 +103,7 @@ function CreateClass($class)
     # Get LDAP Paths and Users
     $LDAP_OU = "OU={0},{1}" -f $class.Department,$LDAP                                                                                 # Make the LDAP Suffix once
     $FacultyGroupName = $class.Faculty                                                                                                 # This is done due to the AD Filter Syntax... fail
-    
+
     $FacultyAD = Get-ADGroup -Filter { name -eq $FacultyGroupName } -SearchBase "OU=Groups,$LDAP_OU"                                   # Finds the group in the AD
 
     # Creates a new class, its folders and groups
@@ -110,7 +111,7 @@ function CreateClass($class)
     $InstructorAD = New-ADGroup $class.Instructor -Path "OU=Instructors,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru      # Create the faculty group
 
     # Add initial groups
-    if ($Debug) { Write-Output "AD Groups" $FacultyAD $InstructorAD }										       # The Debug output for the faculty ad and instructor ad group
+    if ($Debug) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              # The Debug output for the faculty ad and instructor ad group
     Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                               # Adds the faculty group to the class instructor group
     Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                                 # Adds the instructor group to the class group
 
@@ -263,32 +264,17 @@ if (Test-Path $TombstoneFile) {                        # Does the tombstone file
 Write-Output "Importing OIT User File"
 $users = Import-Csv $OITFile -Header  "Givenname","MiddleName","Surname","SamAccountName","Year","Major",
                                    "Password","Class1","Class2","Class3","Class4","Class5","Class6",
-                                   "Class7","Class8","Class9","Class10" -Delimiter ';' |                        # Import the file with the given headers as properties
-         where { $Majors.ContainsKey($_.Major) } |                                                              # Only include users which are in one of our Majors     
-         add-member -membertype "ScriptProperty" -name Department -Value { $Majors[$this.Major] } -PassThru     # Add a department field to these students based on their major
+                                   "Class7","Class8","Class9","Class10" -Delimiter ';' |                    # Import the file with the given headers as properties
+         add-member -membertype "ScriptProperty" -name Department -Value { 
+             if (!$Majors.ContainsKey($this.Major)) { $Majors["CADC"] }                                     # If user's major doesn't exist dump them to CADC Major
+             else { $Majors[$this.Major] }                                                                  # Otherwise give them to their respective department
+         } -PassThru # Add a department field to these students based on their major
 
 # We collapse down the csv file into user and class objects and perform the necessary operations
-$Class_Users = @{}                                                                                              # Holds a list of all classes and the users which are in them
-$Start = Get-Date                                                                                               # Used to time how long it takes
+$Class_Users = @{}                                                                                          # Holds a list of all classes and the users which are in them
+$Start = Get-Date                                                                                           # Used to time how long it takes
 Write-Output "Start" (Get-Date)
-foreach ($user in $users) {                                                                                     # For every user
-    $LDAP_OU = "OU={0},{1}" -f $user.Department,$LDAP
-    $username = $user.SamAccountName                                                                            # Stupid fix for powershell AD Filters (can't access a property of PSCustomObject directly)
-    $UserAD = Get-ADUser -Filter { Name -eq $username }                                                         # Attempt to retreive the user from the ad
-    if ($UserAD -eq $null)                                                                                      # If the user doesn't exist
-    {
-        $UserAD = New-ADUser $user.SamAccountName -SamAccountName $user.SamAccountName `
-                                    -GivenName $user.GivenName -Surname $user.Surname -Department $user.Department `
-                                    -AccountPassword $UserPassword -Enabled $false -ScriptPath 'SLOGIC' `
-                                    -DisplayName ("{0} {1}" -f $user.GivenName,$user.Surname) `
-                                    -Description ("{0} {1}" -f $user.GivenName,$user.Surname) `
-				    -UserPrincipalName ("{0}@{1}" -f $user.SamAccountName,$FullDomain) `
-			            -EmailAddress ("{0}@auburn.edu" -f $user.SamAccountName) `
-                                    -AccountExpirationDate $UserExpireDate -Path "OU=Students,$LDAP_OU" `
-                                    -WhatIf:$Compare -PassThru                                                  # Create the AD Object with the given properties
-        Write-Output "Creating a new user: " $user.SamAccountName
-    }
-
+foreach ($user in $users) {                                                                                 # For every user
     # Loop through users classes and add unique ones to our big list
     # We do some shady stuff and retreive all of the properties labeled Class* then load them into an array of classes
     $MyClasses = $user | get-member -Name "Class*" | select -ExpandProperty Definition |                    # Get all the properties in the format of Class*
@@ -301,13 +287,37 @@ foreach ($user in $users) {                                                     
                 $Empty_Array = New-Object System.Collections.ArrayList                                      # Create an empty array (the long way)
                 $Class_Users.Add($Class.FormattedName,$Empty_Array);                                        # Add the class name and empty list to our Class_Users object
 
-                if ($Vebrose) { Write-Output "Found New Class: " $Class.Name }                                # Tell you about it if vebrose mode is on
+                if ($Vebrose) { Write-Output "Found New Class: " $Class.Name }                              # Tell you about it if vebrose mode is on
             }
         }
     }
 
     # Get a list of our classes but only the formatted names
     $Class_Names = $MyClasses | % { $_.FormattedName }
+
+    # Here we build the LDAP_OU and Check if this user is someone we should proceed with or not
+    if (!$Majors.ContainsKey($user.Major) -and $MyClasses.Count -eq 0) {                                    # The user is not declared one of our majors, we need to see if they are takingany of our classes
+        continue                                                                                            # Nor our they in any of our clases, ditch the freaks :)
+    }
+    $LDAP_OU = "OU={0},{1}" -f $user.Department,$LDAP                                                       # We use the $user.Department to determine where to store them
+    $username = $user.SamAccountName                                                                        # Stupid fix for powershell AD Filters (can't access a property of PSCustomObject directly)
+
+
+    # Here we either create the user or retrieve the User AD object
+    $UserAD = Get-ADUser -Filter { Name -eq $username }                                                     # Attempt to retreive the user from the ad
+    if ($UserAD -eq $null)                                                                                  # If the user doesn't exist
+    {
+        $UserAD = New-ADUser $user.SamAccountName -SamAccountName $user.SamAccountName `
+                                    -GivenName $user.GivenName -Surname $user.Surname -Department $user.Department `
+                                    -AccountPassword $UserPassword -Enabled $false -ScriptPath 'SLOGIC' `
+                                    -DisplayName ("{0} {1}" -f $user.GivenName,$user.Surname) `
+                                    -Description ("{0} {1}" -f $user.GivenName,$user.Surname) `
+                                    -UserPrincipalName ("{0}@{1}" -f $user.SamAccountName,$FullDomain) `
+                                    -EmailAddress ("{0}@auburn.edu" -f $user.SamAccountName) `
+                                    -AccountExpirationDate $UserExpireDate -Path "OU=Students,$LDAP_OU" `
+                                    -WhatIf:$Compare -PassThru                                              # Create the AD Object with the given properties
+        Write-Output "Creating a new user: " $user.SamAccountName
+    }
 
     # Get Groups and handle dropped classes
     $GroupsAD = Get-ADPrincipalGroupMembership $UserAD                                                      # Retrieves the user's groups
@@ -345,7 +355,7 @@ foreach ($user in $users) {                                                     
                 $UserPath = join-path $ClassFolders[$DropClass.Department] -ChildPath `
                                             ("{0}\{1}" -f $DropClass.FormattedName,$user.SamAccountName)    # Get the path for this user's class folder
 
-		if (!(Test-Path $UserPath)) { continue }						    # If the folder doesn't exist don't delete them its fine
+        if (!(Test-Path $UserPath)) { continue }                            # If the folder doesn't exist don't delete them its fine
 
                 $acl = Get-ACL $UserPath                                                                    # Get the acls for that folder
                 $rule = $acl.Access | where { $_.IdentityReference -eq ("$DOMAIN"+$user.SamAccountName) }   # Get the rule which gives the user access
@@ -398,7 +408,7 @@ Write-Output "Creating Classes and Adding Users"                                
 foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                                                     # Enumerate over every class we have
     $Class = FormatClass $ClassEntry.Key;                                                                   # Get The class object
     $Class_FormattedName = $Class.FormattedName                                                             # Used because the filter syntax doesn't allow hash table access
-    if ($vebrose) { Write-Output "Working on Class:" $Class.Name }					    # We say what class were about to work on
+    if ($vebrose) { Write-Output "Working on Class:" $Class.Name }                      # We say what class were about to work on
 
     $LDAP_OU = "OU={0},{1}" -f $Class.Department,$LDAP                                                      # Make the LDAP OU once
     $ClassAD = Get-ADGroup -Filter { name -eq $Class_FormattedName } -SearchBase "OU=Classes,$LDAP_OU"      # Retreive the AD Group for the class

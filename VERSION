@@ -2,6 +2,12 @@ Version History
 ------------------------------
 
 ----------------------
+Version 2.0
+----------------------
+- Added ability to place user in CADC department if major is not recognized but taking CADC classes 
+- Added check to user department to give them CADC if the major isn't recognized
+
+----------------------
 Version 2.0 - BETA
 ----------------------
 - Script is now written in powershell with no external dependencies except the ad module

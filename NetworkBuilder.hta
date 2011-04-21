@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>
+Network Builder
+</title>
+
+<!-- Meta Tags -->
+<meta charset="utf-8">
+<meta name="generator" content="Wufoo.com" />
+
+<!-- CSS -->
+<link rel="stylesheet" href="css/structure.css" type="text/css" />
+<link rel="stylesheet" href="css/form.css" type="text/css" />
+
+<!-- JavaScript -->
+<script type="text/javascript" src="scripts/wufoo.js"></script>
+
+<!-- HTML Application -->
+<hta:application
+            ID="NetworkBuilder"
+            ApplicationName="NetworkBuilder"
+            SingleInstance="yes"
+            Icon="NetworkBuilder.ico"
+            Border="thin"
+            Scroll="no"
+            />
+
+<!-- Scripts -->
+<script language="javascript">
+    window.onload = function init() {
+        window.resizeTo(775,725);
+    }
+
+    function handleOnSubmit()
+    {
+        // Collect the parameters
+        // Run the powershell script
+        // Disable the button while its running
+        // Wait for response
+
+        return false;
+    }
+</script>
+</head>
+
+<body id="public">
+    <div id="container">
+        <form class="wufoo" method="post" action="#public" onsubmit="return handleOnSubmit.call(this)">
+            <h2>Network Builder Parameters</h2>
+            <hr/>
+
+            <ul>
+                <li id="foli1">
+                    <label class="desc" id="title1" for="OITFile">Required Parameters</label>
+                    <span class="full">
+                        <input id="OITFile" name="OITFile" type="file" class="field text oitfile" tabindex="1" style="width:100%"/>
+                        <label for="Field1">OIT File</label>
+                    </span>
+                </li>
+                <li id="foli3" class="complex">
+                    <label class="desc" id="title3" for="UserPassword">Optional Parameters</label>
+                    <div>
+                        <span class="left">
+                            <input id="UserPassword" name="UserPassword" type="password" class="field text addr" value="tigers" tabindex="3" />
+                            <label for="UserPassword">Default User Password</label>
+                        </span>
+                        <span class="right">
+                            <input id="UserExpire" name="UserExpire" type="text" class="field text addr" value="5/11/2011" tabindex="4" />
+                            <label for="UserExpire">User Expiration Date</label>
+                        </span>
+                        <span class="clear left">
+                            <input id="TombstoneFile" name="TombstoneFile" type="text" class="field text addr" value="tombstone.xml" tabindex="5"/>
+                            <label for="TombstoneFile">Tombstone File</label>
+                        </span>
+                        <span class="right">
+                            <input id="FullDomain" name="FullDomain" type="text" class="field text addr" value="cadcit.auburn.edu" tabindex="6"/>
+                            <label for="FullDomain">Full Domain</label>
+                        </span>
+                    </div>
+                </li>
+                <li id="foli9">
+                    <label class="desc" id="title9" for="LogEmail">Email For Log File</label>
+                    <div>
+                        <input id="LogEmail" name="LogEmail" type="email" spellcheck="false" class="field text medium" value="davis51@auburn.edu" maxlength="255" tabindex="9"/>
+                    </div>
+                </li>
+                <li id="foli11" class="threeColumns">
+                    <fieldset>
+                        <legend id="title11" class="desc" style="padding-top: 25px">Which days can you volunteer?</legend>
+                        <div>
+                            <span>
+                                <input id="InheritanceFix" name="InheritanceFix" type="checkbox" class="field checkbox" value="InheritanceFix" tabindex="13"/>
+                                <label class="choice" for="InheritanceFix">Inheritance Fix</label>
+                            </span>
+                            <span>
+                                <input id="CompareMode" name="CompareMode" type="checkbox" class="field checkbox" value="CompareMode" tabindex="14"/>
+                                <label class="choice" for="CompareMode">Compare Mode</label>
+                            </span>
+                            <span>
+                                <input id="VerboseMode" name="VerboseMode" type="checkbox" class="field checkbox" value="VerboseMode" tabindex="15"/>
+                                <label class="choice" for="VerboseMode">Verbose Mode</label>
+                            </span>
+                            <span>
+                                <input id="DebugMode" name="DebugMode" type="checkbox" class="field checkbox" value="DebugMode" tabindex="16"/>
+                                <label class="choice" for="DebugMode">Debug Mode</label>
+                            </span>
+                            <span>
+                                <input id="ShowStats" name="ShowStats" type="checkbox" class="field checkbox" value="ShowStats" tabindex="17" checked/>
+                                <label class="choice" for="ShowStats">Show Stats</label>
+                            </span>
+                            <span>
+                                <input id="NoLogging" name="NoLogging" type="checkbox" class="field checkbox" value="NoLogging" tabindex="17"/>
+                                <label class="choice" for="NoLogging">No Logging</label>
+                            </span>
+                        </div>
+                    </fieldset>
+                </li>
+                <li class="buttons ">
+                    <div>
+                        <input id="saveForm" name="saveForm" class="btTxt submit" type="submit" value="Run Network Builder"/>
+                    </div>
+                </li>
+            </ul>
+        </form>
+    </div><!--container-->
+    <img id="bottom" src="images/bottom.png" alt="" />
+    </body>
+</html>

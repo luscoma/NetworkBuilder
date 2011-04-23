@@ -16,6 +16,7 @@ Network Builder
 
 <!-- JavaScript -->
 <script type="text/javascript" src="scripts/wufoo.js"></script>
+<script type="text/javascript" src="scripts/jquery-1.5.2.min.js"></script>
 
 <!-- HTML Application -->
 <hta:application
@@ -39,6 +40,8 @@ Network Builder
         // Run the powershell script
         // Disable the button while its running
         // Wait for response
+        alert("word");
+        alert($(this))
 
         return false;
     }
@@ -47,7 +50,7 @@ Network Builder
 
 <body id="public">
     <div id="container">
-        <form class="wufoo" method="post" action="#public" onsubmit="return handleOnSubmit.call(this)">
+        <form class="wufoo" method="post" onsubmit="return handleOnSubmit.call(this)">
             <h2>Network Builder Parameters</h2>
             <hr/>
 

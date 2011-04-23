@@ -14,7 +14,7 @@
     They can be passed when calling via the command line
 #>
 param(
-        [string]$OITFile                = "users.txt",         # This is the OIT file to parse
+        [string]$OITFile                = "users.txt",                  # This is the OIT file to parse
                                                                         # It should be either absolute or relative to where the script is located
         [string]$UserPasswordString     = "tigers",                     # The default password used for each created user, it must conform to the domain password policy
         [DateTime]$UserExpireDate       = "5/20/2011",                  # Expiration Date of the created users
@@ -22,12 +22,14 @@ param(
         [int]$TombstoneDays             = 7,                            # This is the number of days a user's class folder is kept before it is permanately delated
                                                                         # Once this day length is reached, the user folder is deleted and unrecoverable if the student rejoins the class
         [string]$FullDomain             = "cadcit.auburn.edu",          # The full domain suffix, this is parsed for the LDAP suffix and the domain prefix
+        [string]$AdminEmail             = "davis51@auburn.edu",         # The Email to email the log file to upon completion
 
         [Switch]$DoInheritance          = $true,                        # Enables or disables the inhertance fix for top-level folders
         [Switch]$Compare                = $false,                       # Enables compare mode which does not cause any changes
-                                                                        # NOTE: This will fail currently (I believe) due to Get-Acl and Set-ACL being attempted on a non-existant folder, this will be tested in the future
         [Switch]$Vebrose                = $false,                       # Enables the vebrose mode of logging
-    [Switch]$Debug          = $false            # Enables additional debugging messages
+        [Switch]$Debug                  = $false,                       # Enables additional debugging messages
+        [Switch]$EnableStats            = $true,                        # Prints some stats at the end of the script of what was or would be cahnged
+        [Switch]$NoLogging              = $false                        # Disables e-mailing of the log file
      )
 
 <#
@@ -244,8 +246,9 @@ function FormatClass($Class_Name)
 trap {
     Write-Output "Error Occurred: $_"; 
     Write-Output "Terminating Execution";
+    $_.Message | Clip
 
-    if ($Compare -eq $false) { break; }     # In non-compare mode if a serious error occurres we dump
+    if ($Compare -eq $false) { Exit 1; }     # In non-compare mode if a serious error occurres we dump
     else { continue; }                      # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it
 }
 

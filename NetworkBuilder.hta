@@ -17,6 +17,7 @@ Network Builder
 <!-- JavaScript -->
 <script type="text/javascript" src="scripts/wufoo.js"></script>
 <script type="text/javascript" src="scripts/jquery-1.5.2.min.js"></script>
+<script type="text/javascript" src="scripts/jquery.validate.min.js"></script>
 
 <!-- HTML Application -->
 <hta:application
@@ -25,32 +26,133 @@ Network Builder
             SingleInstance="yes"
             Icon="NetworkBuilder.ico"
             Border="thin"
-            Scroll="no"
+            Scroll="auto"
             />
 
 <!-- Scripts -->
 <script language="javascript">
-    window.onload = function init() {
-        window.resizeTo(775,725);
+    $(document).ready( function() { 
+        // Resize Window
+        window.resizeTo(775,725); 
+
+        // Validation Setup
+        $("#mainform").validate({
+            submitHandler: handleOnSubmit,
+            rules: {
+                OITFile: "required",
+                UserPassword: "required",
+                UserExpire:{
+                    required: true,
+                    date: true
+                },
+                TombstoneFile: "required",
+                FullDomain: "required",
+                LogEmail: {
+                    required: "#NoLogging:unchecked",
+                    email: true
+                }
+            },
+            messages: {
+                OITFile: "You must select an OIT filename",
+                UserPassword: "User's default password is required",
+                UserExpire: "User expiration date is required and must be a valid date",
+                TombstoneFile: "Tombstone filename is required",
+                FullDomain: "The Full Domain is required by the script",
+                LogEmail: "An Email address is required if logging is enabled"
+            }
+        });
+    });
+
+    $.format = function(fmt, values) {
+        /// <summary>Formats a string with the given JSON values</summary>
+        /// <param name="fmt" type="String">Format string to replace values with</param>
+        /// <param name="values" type="JSON">Values to replace in string</param>
+        /// <returns type="String" />
+
+        var str = fmt;
+        for (var field in values) {
+            var re = new RegExp("\\{" + field + "}","g");
+            str = str.replace(re,values[field]);
+        }
+
+        return str;
     }
 
-    function handleOnSubmit()
+    function handleOnSubmit(form)
     {
         // Collect the parameters
-        // Run the powershell script
+        var args = {
+            file: $("#OITFile").val(),
+            userpass: $("#UserPassword").val(),
+            userexpire: $("#UserExpire").val(),
+            tombstone: $("#TombstoneFile").val(),
+            fulldomain: $("#FullDomain").val(),
+            logemail: $("#LogEmail").val() || "none@provided.net",
+            doinheritance: $("#InheritanceFix").is(":checked"),
+            comparemode: $("#CompareMode").is(":checked"),
+            verbose: $("#VerboseMode").is(":checked"),
+            debug: $("#DebugMode").is(":checked"),
+            showstats: $("#ShowStats").is(":checked"),
+            nologging: $("#NoLogging").is(":checked")
+        }
+
+        /* 
+        // Verify
+        alert(file);
+        alert(userpass);
+        alert(userexpire);
+        alert(tombstone_file);
+        alert(fulldomain);
+        alert(logemail);
+        alert(doinheritance);
+        alert(comparemode);
+        alert(verbose);
+        alert(debug);
+        alert(showstats);
+        alert(nologging);
+        */
+
         // Disable the button while its running
-        // Wait for response
-        alert("word");
-        alert($(this))
+        $("#RunScriptSubmit").attr("disabled","disabled");
+
+        // Run Powershell
+        var arg_string = $.format("{file} {userpass} {userexpire} {tombstone} {fulldomain} {logemail} {doinheritance} {comparemode} {verbose} {debug} {showstats} {nologging}",args);
+        alert(arg_string);
+        RunPowershell(arg_string);
+
+        // Reenable Button
+        $("#RunScriptSubmit").removeAttr("disabled");
 
         return false;
     }
+</script>
+<script type="text/vbscript">
+    ' I Hate VB Script
+    ' Unfortunately Microsoft HTAs are still in the stone age and only allow vbscript for integration purposes
+    ' Hopefully someone will fix this in the future
+    Sub RunPowershell(args)
+       Dim oShell, scriptPath, appCmd, retVal, retData, scriptName
+       Set oShell  = CreateObject("WScript.Shell")
+
+       ' Build the script path
+       scriptName  = "Test.ps1"
+       scriptPath  = oShell.CurrentDirectory & "\" & scriptName
+       appCmd      = "powershell -ExecutionPolicy Unrestricted &'" & scriptPath & "'"
+
+       ' Run Script and Get Return Value
+       retVal      = oShell.Run(appCmd, 4, true)
+       If(retVal = 1) Then
+          msgbox "An Error Occurred, Please check the log file for more details", vbExclamation, "Error"
+       Else
+          msgbox "Operation Completed", vbInformation, "Return Value"
+       End If
+    End Sub
 </script>
 </head>
 
 <body id="public">
     <div id="container">
-        <form class="wufoo" method="post" onsubmit="return handleOnSubmit.call(this)">
+        <form id="mainform" class="wufoo" method="post">
             <h2>Network Builder Parameters</h2>
             <hr/>
 
@@ -59,11 +161,11 @@ Network Builder
                     <label class="desc" id="title1" for="OITFile">Required Parameters</label>
                     <span class="full">
                         <input id="OITFile" name="OITFile" type="file" class="field text oitfile" tabindex="1" style="width:100%"/>
-                        <label for="Field1">OIT File</label>
+                        <label for="OITFile">OIT File</label>
                     </span>
                 </li>
                 <li id="foli3" class="complex">
-                    <label class="desc" id="title3" for="UserPassword">Optional Parameters</label>
+                    <label class="desc" for="UserPassword">Optional Parameters</label>
                     <div>
                         <span class="left">
                             <input id="UserPassword" name="UserPassword" type="password" class="field text addr" value="tigers" tabindex="3" />
@@ -122,7 +224,7 @@ Network Builder
                 </li>
                 <li class="buttons ">
                     <div>
-                        <input id="saveForm" name="saveForm" class="btTxt submit" type="submit" value="Run Network Builder"/>
+                        <input id="RunScriptSubmit" name="saveForm" class="btTxt submit" type="submit" value="Run Network Builder"/>
                     </div>
                 </li>
             </ul>

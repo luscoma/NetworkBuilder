@@ -117,7 +117,6 @@ Network Builder
 
         // Run Powershell
         var arg_string = $.format("{file} {userpass} {userexpire} {tombstone} {fulldomain} {logemail} {doinheritance} {comparemode} {verbose} {debug} {showstats} {nologging}",args);
-        alert(arg_string);
         RunPowershell(arg_string);
 
         // Reenable Button
@@ -137,7 +136,7 @@ Network Builder
        ' Build the script path
        scriptName  = "Test.ps1"
        scriptPath  = oShell.CurrentDirectory & "\" & scriptName
-       appCmd      = "powershell -ExecutionPolicy Unrestricted &'" & scriptPath & "'"
+       appCmd      = "powershell -ExecutionPolicy Unrestricted """ & scriptPath & " " & args  & """"        ' powershell with unrestricted script policy then the script to run plus arguments to run
 
        ' Run Script and Get Return Value
        retVal      = oShell.Run(appCmd, 4, true)

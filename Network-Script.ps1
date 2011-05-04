@@ -21,16 +21,24 @@ param(
         [string]$TombstoneFile          = "tombstone.xml",              # The file used to store the currently tombstoned class folders and the date they were tombstoned
         [int]$TombstoneDays             = 7,                            # This is the number of days a user's class folder is kept before it is permanately delated
                                                                         # Once this day length is reached, the user folder is deleted and unrecoverable if the student rejoins the class
-        [string]$FullDomain             = "cadcit.auburn.edu",          # The full domain suffix, this is parsed for the LDAP suffix and the domain prefix
+        [string]$FullDomain             = "test.local",                 # The full domain suffix, this is parsed for the LDAP suffix and the domain prefix
         [string]$AdminEmail             = "davis51@auburn.edu",         # The Email to email the log file to upon completion
-
-        [Switch]$DoInheritance          = $true,                        # Enables or disables the inhertance fix for top-level folders
+        [string]$EmailServer            = "tigerout.auburn.edu",        # The SMTP server to send the e-mail
+		
+        [Switch]$DoInheritance          = $false,                       # Enables or disables the inhertance fix for top-level folders
         [Switch]$Compare                = $false,                       # Enables compare mode which does not cause any changes
         [Switch]$Vebrose                = $false,                       # Enables the vebrose mode of logging
-        [Switch]$Debug                  = $false,                       # Enables additional debugging messages
         [Switch]$EnableStats            = $true,                        # Prints some stats at the end of the script of what was or would be cahnged
-        [Switch]$NoLogging              = $false                        # Disables e-mailing of the log file
+        [Switch]$NoLogging              = $false,                       # Disables e-mailing of the log file
+		[Switch]$NoEmail                = $false                        # Disables e-mailing of the log file
      )
+
+# Enable logging unless told not to
+if ($NoLogging -eq $false) { start-transcript -Path ("./builder-{0}.log" -f (get-date -uformat "%m-%d-%Y")) }
+
+
+# Ensure the AD Module is imported
+import-module activedirectory
 
 <#
     LDAP Suffixes and Domain Prefixes
@@ -113,7 +121,7 @@ function CreateClass($class)
     $InstructorAD = New-ADGroup $class.Instructor -Path "OU=Instructors,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru      # Create the faculty group
 
     # Add initial groups
-    if ($Debug) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              # The Debug output for the faculty ad and instructor ad group
+    if ($Vebrose) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              # The Debug output for the faculty ad and instructor ad group
     Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                               # Adds the faculty group to the class instructor group
     Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                                 # Adds the instructor group to the class group
 
@@ -241,6 +249,18 @@ function FormatClass($Class_Name)
         Faculty = "{0} Faculty" -f $Majors[$name.Substring(0,4)];                                               # Sets the Faculty group which is Department Faculty
     };
 }
+<#
+    IncrementalStat
+    Checks to see if this stat key exists it it does not it will create it and set it to 1
+    Otherwise it incrementals an existing key
+
+    $Key        Key to check for
+#>
+function IncrementStatKey($Key)
+{
+    if ($Stats.ContainsKey($Key)) { $Stats[$Key]++; }
+    else { $Stats[$Key] = 1; }
+}
 
 # Traps Any Errors
 trap {
@@ -248,8 +268,8 @@ trap {
     Write-Output "Terminating Execution";
     $_.Message | Clip
 
-    if ($Compare -eq $false) { Exit 1; }     # In non-compare mode if a serious error occurres we dump
-    else { continue; }                      # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it
+	if ($SendingEmail -or $Compare -eq $true) { continue }    # In non-compare mode if a serious error occurres we dump
+    else { Exit 1 }                                          # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it
 }
 
 <#
@@ -275,8 +295,9 @@ $users = Import-Csv $OITFile -Header  "Givenname","MiddleName","Surname","SamAcc
 
 # We collapse down the csv file into user and class objects and perform the necessary operations
 $Class_Users = @{}                                                                                          # Holds a list of all classes and the users which are in them
+$Stats = @{}                                                                                                # Holds statistics about this run of the script
 $Start = Get-Date                                                                                           # Used to time how long it takes
-Write-Output "Start" (Get-Date)
+Write-Output ("Start {0}" -f (Get-Date))
 foreach ($user in $users) {                                                                                 # For every user
     # Loop through users classes and add unique ones to our big list
     # We do some shady stuff and retreive all of the properties labeled Class* then load them into an array of classes
@@ -289,8 +310,9 @@ foreach ($user in $users) {                                                     
             if (!$Class_users.ContainsKey($Class.FormattedName))  {                                         # Have we seen this class before?
                 $Empty_Array = New-Object System.Collections.ArrayList                                      # Create an empty array (the long way)
                 $Class_Users.Add($Class.FormattedName,$Empty_Array);                                        # Add the class name and empty list to our Class_Users object
+                IncrementStatKey ("{0} Classes" -f $Class.Department)
 
-                if ($Vebrose) { Write-Output "Found New Class: " $Class.Name }                              # Tell you about it if vebrose mode is on
+                if ($Vebrose) { Write-Output ("Found New Class: {0}" -f $Class.Name) }                              # Tell you about it if vebrose mode is on
             }
         }
     }
@@ -302,6 +324,7 @@ foreach ($user in $users) {                                                     
     if (!$Majors.ContainsKey($user.Major) -and $MyClasses.Count -eq 0) {                                    # The user is not declared one of our majors, we need to see if they are takingany of our classes
         continue                                                                                            # Nor our they in any of our clases, ditch the freaks :)
     }
+    else { IncrementStatKey ("{0} Students" -f $user.Department) }                                               # If the user is in our majors then we make sure we note this in our statistics
     $LDAP_OU = "OU={0},{1}" -f $user.Department,$LDAP                                                       # We use the $user.Department to determine where to store them
     $username = $user.SamAccountName                                                                        # Stupid fix for powershell AD Filters (can't access a property of PSCustomObject directly)
 
@@ -319,7 +342,9 @@ foreach ($user in $users) {                                                     
                                     -EmailAddress ("{0}@auburn.edu" -f $user.SamAccountName) `
                                     -AccountExpirationDate $UserExpireDate -Path "OU=Students,$LDAP_OU" `
                                     -WhatIf:$Compare -PassThru                                              # Create the AD Object with the given properties
-        Write-Output "Creating a new user: " $user.SamAccountName
+
+        IncrementStatKey ("New {0} Students" -f $user.Department)                                                # Adds a new user to our statistic count for this major
+        Write-Output ("Creating a new user: {0}" -f $user.SamAccountName)
     }
 
     # Get Groups and handle dropped classes
@@ -331,7 +356,9 @@ foreach ($user in $users) {                                                     
     if ($AddedClasses -ne $null) {                                                                          # Were there any we need to be added to?    
         foreach ($Add in $AddedClasses) {                                                                   # Lets loop through them
             $Class_Users[$Add].Add($user.SamAccountName) | out-null                                         # Add the user to this class in the list of classes and users
-            if ($Vebrose) { Write-Output "Adding Class: $add for" $user.SamAccountName }                      # Tell you about it if vebrose is on
+
+            IncrementStatKey "Students Who Added A Class"
+            if ($Vebrose) { Write-Output ("Adding Class: $add for {0}" -f $user.SamAccountName) }             # Tell you about it if vebrose is on
         }
     }
 
@@ -339,10 +366,10 @@ foreach ($user in $users) {                                                     
     $DroppedClasses = $GroupsAD | 
                         where { $_.name -match "\w{4}_\d{4}_\d{3}" -and $Class_Names -notcontains $_.name } # Filter the groups by the names that don't exist anymore in our class names list
     if ($DroppedClasses -ne $null) {                                                                        # Should any classes be dropped?
-        foreach ($DropAD in $DroppedClasses) {                                                              # If so lets do so           
+        foreach ($DropAD in $DroppedClasses) {                                                              # If so lets do so
             $DropClass = FormatClass $DropAD.name                                                           # Get a class object for this class
             Remove-ADPrincipalGroupMembership $UserAD -memberOf $DropAD -WhatIf:$Compare -Confirm:$false    # Removes the AD user from the group
-            if ($Vebrose) { Write-Output "Dropping Class:" $DropClass.name "for" $user.SamAccountName }       # If vebrose tell you this guy is dropped
+            if ($Vebrose) { Write-Output ("Dropping Class: {0} for {1}" -f $DropClass.name,$user.SamAccountName) }     # If vebrose tell you this guy is dropped
 
             # Check if section was moved and not a full drop
             $New_Section = $AddedClasses | 
@@ -350,15 +377,16 @@ foreach ($user in $users) {                                                     
                                  select -First 1                                                            # (only select 1, hopefully they dont join two sections, if so we can't help them)
 
             if ($New_Section -ne $null) {                                                                   # Did they move to a new section?
-                MoveUserClassSection $user $DropClass (FormatClass $New_Section)                           # If so lets move them
-                if ($Vebrose) { Write-Output "Moved User Section from" $DropClass.Name "to" $New_Section }         # If vebrose tell youa bout it
+                MoveUserClassSection $user $DropClass (FormatClass $New_Section)                            # If so lets move them
+                if ($Vebrose) { Write-Output ("Moved User Section from {0} to {1}" -f $DropClass.Name, $New_Section) }  # If vebrose tell youa bout it
+                IncrementStatKey "Students Who Moved Section"
             }
             else {                                                                                          # If its not a section move we must tombstone the class
                 # Remove the ACL
                 $UserPath = join-path $ClassFolders[$DropClass.Department] -ChildPath `
                                             ("{0}\{1}" -f $DropClass.FormattedName,$user.SamAccountName)    # Get the path for this user's class folder
 
-        if (!(Test-Path $UserPath)) { continue }                            # If the folder doesn't exist don't delete them its fine
+                if (!(Test-Path $UserPath)) { continue }                                                    # If the folder doesn't exist don't delete them its fine
 
                 $acl = Get-ACL $UserPath                                                                    # Get the acls for that folder
                 $rule = $acl.Access | where { $_.IdentityReference -eq ("$DOMAIN"+$user.SamAccountName) }   # Get the rule which gives the user access
@@ -370,20 +398,22 @@ foreach ($user in $users) {                                                     
                 $UserDir.Attributes = $UserDir.Attributes -bor [System.IO.FileAttributes]"hidden"           # Or in the hidden attribute
 
                 # Tombstone Folder
-                if (!$Tombstones.Containskey($user.SamAccountName)) {                                        # If the user does not have any other tombstoned folders        
+                if (!$Tombstones.Containskey($user.SamAccountName)) {                                       # If the user does not have any other tombstoned folders        
                     $Tombstones.Add($user.SamAccountName,@{});                                              # We creates a tombstone for this user
                 }
 
                 # Add a tombstone entry
                 $Tombstones[$user.SamAccountName].Add($DropClass.FormattedName, (Get-Date))                      # Add the class name to this users tombstoned list and the current date
-                if ($Vebrose) { Write-Output "Tombstoned class for:" $user.SamAccountName "in" $DropClass.Name; }  # If vebrose tell you about it
+                if ($Vebrose) { Write-Output ("Tombstoned class for: {0} in {1}" -f $user.SamAccountName,$DropClass.Name) }  # If vebrose tell you about it
+
+                IncrementStatKey "Classes Tombstoned"
             }
         }
     }
 
-    # Also don't forget we have to recycle courses and handle folders that are done and not added back 
-    $UserTombstoneClasses = $Tombstones[$user.SamAccountName]                                               # Get the users list of tombstoned classes      
-    if ($Vebrose) { Write-Output "Checking tombstoned classes for:" $user.SamAccountName }                    # If veborse tell you about it
+    # Also don't forget we have to recycle courses and handle folders that are done and not added back
+    $UserTombstoneClasses = $Tombstones[$user.SamAccountName]                                               # Get the users list of tombstoned classes
+    if ($Vebrose) { Write-Output ("Checking tombstoned classes for: {0}" -f $user.SamAccountName) }                  # If veborse tell you about it
     if ($UserTombstoneClasses -ne $null) {                                                                  # Does the user have any tombstoned classes
         $UserTombstoneClasses_Clone = $UserTombstoneClasses.Clone()                                         # If so lets clone the list so we can iterate over it while removing items from the original
         foreach ($TombstoneClass in $UserTombstoneClasses_Clone.GetEnumerator()) {                          # Iterate over the cloned list  
@@ -394,10 +424,12 @@ foreach ($user in $users) {                                                     
                         join-path -ChildPath $user.SamAccountName | 
                         Remove-Item -Force                                                                  # And remove the item (-Force is required becaues it is a hidden folder)
 
-                if ($Vebrose) { Write-Output "Removed tombstoned class for user:" $user.SamAccountName "in class" $TombstoneClass.Key } # tell you about it
+                if ($Vebrose) { Write-Output ("Removed tombstoned class for user: {0} in class {1}" -f $user.SamAccountName, $TombstoneClass.Key) } # tell you about it
 
                 # Remove from tombstones list
                 $UserTombstoneClasses.Remove($TombstoneClass.Key)                                           # Remove this class from the original (non-cloned) list
+
+                IncrementStatKey "Tombstoned Classes Removed"
             }
         }
 
@@ -406,24 +438,26 @@ foreach ($user in $users) {                                                     
 }
 
 # Now we focus on creating the classes and added the users to those classes
-Write-Output "Parsed File and Created Users: Time Elapsed" ((Get-Date) - $Start).TotalSeconds                 # tell you how long it took to do part 1
-Write-Output "Creating Classes and Adding Users"                                                              # Say what were doing
+Write-Output ("Parsed File and Created Users - Time Elapsed {0} Seconds" -f ((Get-Date) - $Start).TotalSeconds)               # tell you how long it took to do part 1
+Write-Output "Creating Classes and Adding Users"                                                            # Say what were doing
 foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                                                     # Enumerate over every class we have
     $Class = FormatClass $ClassEntry.Key;                                                                   # Get The class object
     $Class_FormattedName = $Class.FormattedName                                                             # Used because the filter syntax doesn't allow hash table access
-    if ($vebrose) { Write-Output "Working on Class:" $Class.Name }                      # We say what class were about to work on
+    if ($Vebrose) { Write-Output ("Working on Class: {0}" -f $Class.Name) }                                          # We say what class were about to work on
 
     $LDAP_OU = "OU={0},{1}" -f $Class.Department,$LDAP                                                      # Make the LDAP OU once
     $ClassAD = Get-ADGroup -Filter { name -eq $Class_FormattedName } -SearchBase "OU=Classes,$LDAP_OU"      # Retreive the AD Group for the class
     if ($ClassAD -eq $null)                                                                                 # If the class does not already exist
     {
         $ClassAD = CreateClass $Class                                                                       # Lets create it
-        Write-Output "Creating Class:" $Class.Name                                                            # Tell you we're creating a class if in vebrose mode
+        Write-Output ("Creating Class: {0}" -f $Class.Name)                                                 # Tell you we're creating a class if in vebrose mode
+
+        IncrementStatKey "New AD Classes Created"
     }
     else { CreateClassFolders $Class }                                                                      # If we didn't create the class we should check if the class folder exists, this function will create them if it doesnt
 
     # Add users to class
-    if ($Vebrose) { Write-Output "Adding Users to Class:" $Class.Name }                                       # lets add the necessary users to this class
+    if ($Vebrose) { Write-Output ("Adding Users to Class: {0}" -f $Class.Name) }                            # lets add the necessary users to this class
     if ($Class_Users[$Class.FormattedName].Count -gt 0) {                                                   # If this class has any users to be added to it
         foreach ($Username in $Class_Users[$Class.FormattedName]) {                                         # Lets loop through the users
             # Get AD User and add to group
@@ -445,12 +479,16 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
                 if ($Tombstones[$Username].Count -eq 0) { $Tombstones.Remove($Username) }                   # If the user has no other tombstoned classes remove the user from the tombstoned list
 
                 # Update user
-                if ($Vebrose) { Write-Output "Found Tombstoned Class and User: $Username in" $Class.FormattedName }       # Tell someone about it
+                if ($Vebrose) { Write-Output ("Found Tombstoned Class and User: $Username in {0}" -f $Class.FormattedName) }       # Tell someone about it
+
+                IncrementStatKey "Tombstoned Classes Revived"
             }
             elseif (!(Test-Path $UserPath)) {                                                               # we check to ensure the directory doesn't already exist (perhaps it was moved by MoveClassSection)
                 # Create User Directory
                 New-Item $UserPath -type directory -WhatIf:$Compare | out-null                              # Create the users directory
-                if ($Vebrose) { Write-Output "Creating User Directory For Class: $Username in" $Class.FormattedName }     # Tell someone about it
+                if ($Vebrose) { Write-Output ("Creating User Directory For Class: $Username in {0}" -f $Class.FormattedName) }     # Tell someone about it
+
+                IncrementStatKey "User Directories Created"
             }
 
             # Add the user ACL
@@ -458,11 +496,11 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
             $rule = CreateAccessRule $Username "FullControl" $true "Allow"                                  # Create a rule for full control by the user
             $acl.AddAccessRule($rule)                                                                       # Add it
             Set-Acl $acl -Path $UserPath -WhatIf:$Compare                                                   # Set-Acls to the directory
-            if ($Vebrose) { Write-Output "Setting User Folder ACL: $Username in" $Class.FormattedName }       # Tell someonea bout it
+            if ($Vebrose) { Write-Output ("Setting User Folder ACL: $Username in {0}" -f $Class.FormattedName) }       # Tell someonea bout it
         }
     }
 }
-Write-Output "Classes Completed in" ((Get-Date) - $Start).TotalSeconds "Seconds"                              # How long did it takes us?
+Write-Output ("Classes Completed in {0} Seconds" -f ((Get-Date) - $Start).TotalSeconds)                     # How long did it takes us?
 
 # Export our tombstones
 if ($Tombstones.Count -gt 0) { Export-Clixml $TombstoneFile -InputObject $Tombstones }                      # Do we still have any tombstoned classes, if so serialize the hash table of items
@@ -492,8 +530,32 @@ if ($DoInheritance) {                                                           
 }
 
 # Mark the OIT File as processed
-$d = Get-Date                                                                                               # Get the current date
-move-item $OITFile ("Processed-{0}-{1}-{2}.txt" -f $d.Month,$d.Day,$d.Year)                                 # Rename the file so that it can be marked as processed and not accidently rerun
+move-item $OITFile ("Processed-{0}.txt" -f (get-date -uformat "%d-%m-%Y-%H%M%S"))                           # Rename the file so that it can be marked as processed and not accidently rerun
 
-Write-Output "Script Completed in " ((Get-Date) - $Start).TotalSeconds "Seconds" 
+# Output Script Information
+Write-Output ("Script Completed in {0} Seconds " -f ((Get-Date) - $Start).TotalSeconds)
 
+# Output the statistics
+if ($EnableStats) { $Stats }
+
+# Send An EMail if the user wants us to
+if (!$NoEmail) {
+    $SendingEmail = $true                                                                                   # This is a flag so the trap statement doesn't cause an error just because the send fails
+    $message = new-object System.Net.Mail.MailMessage "networkbuilder@cadc.auburn.edu", $AdminEmail, 
+	                             "The Network Builder Has Completed", 
+								 ("The Network Builder has completed and been run on {0}.  Please check the log for details" -f (get-date))
+	if (!$NoLogging) {
+	    stop-transcript
+	    $attachment = New-Object System.Net.Mail.Attachment –ArgumentList ("{0}\builder-{1}.log" -f ((get-location).Path),(get-date -uformat "%m-%d-%Y")), "text/plain"
+		$message.Attachments.Add($attachment)
+	}
+	
+	# Send the email
+    $smtp = new-object System.Net.Mail.SmtpClient $EmailServer
+	try { 
+	    $smtp.Send($message) 
+		Write-Out ("E-Mail Sent to {0}" -f $AdminEmail)
+    }
+	catch { Write-Out "Email Sending Failed" }
+}
+Exit 0

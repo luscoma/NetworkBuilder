@@ -2,6 +2,12 @@ Version History
 ------------------------------
 
 ----------------------
+Version 3.0
+----------------------
+- Added HTML application GUI
+- Tweaked powershell script to provide stats on what was going
+
+----------------------
 Version 2.0
 ----------------------
 - Added ability to place user in CADC department if major is not recognized but taking CADC classes 

@@ -36,7 +36,6 @@ param(
 # Enable logging unless told not to
 if ($NoLogging -eq $false) { start-transcript -Path ("./builder-{0}.log" -f (get-date -uformat "%m-%d-%Y")) }
 
-
 # Ensure the AD Module is imported
 import-module activedirectory
 
@@ -150,6 +149,9 @@ function CreateClassFolders($class)
     New-Item $Assign_Path -type directory -WhatIf:$Compare | out-null                                                                  # Create assignment folder
     New-Item $Shared_Path -type directory -WhatIf:$Compare | out-null                                                                  # Create shared folder
                                                                                                                                        # These our piped to null so they don't echo OK to the console (which you can't turn off...)
+    # Check Compare Mode, the rest of this stuff will fail (the access rule stuff specifically)
+    if ($Compare) { return }
+    
     # Set ACLS For Main Path
     $acl = Get-Acl $Class_Path                                                                                                         # Retrieves the ACLs on the class folder
     $UTM_acl = CreateAccessRule $class.UTM "FullControl" $true "Allow"                                                                 # Adds the UTM user as full control and for inheritance
@@ -376,12 +378,15 @@ foreach ($user in $users) {                                                     
                                  where { $_ -match ($DropClass.FormattedName.Substring(0,8)+"*") } |        # if any section matches the prefix sans the section number 
                                  select -First 1                                                            # (only select 1, hopefully they dont join two sections, if so we can't help them)
 
-            if ($New_Section -ne $null) {                                                                   # Did they move to a new section?
-                MoveUserClassSection $user $DropClass (FormatClass $New_Section)                            # If so lets move them
+            if ($New_Section -ne $null) {                                                                   # Did they move to a new section?          
+                if (!$Compare) { MoveUserClassSection $user $DropClass (FormatClass $New_Section) }         # If so lets move them
                 if ($Vebrose) { Write-Output ("Moved User Section from {0} to {1}" -f $DropClass.Name, $New_Section) }  # If vebrose tell youa bout it
                 IncrementStatKey "Students Who Moved Section"
             }
-            else {                                                                                          # If its not a section move we must tombstone the class
+            else {                                                                                          # If its not a section move we must tombstone the class            
+                IncrementStatKey "Classes Added to Tombstone"
+                if ($Compare) { continue; }                                                                 # If we're comparing then we don't actually need to do anything
+            
                 # Remove the ACL
                 $UserPath = join-path $ClassFolders[$DropClass.Department] -ChildPath `
                                             ("{0}\{1}" -f $DropClass.FormattedName,$user.SamAccountName)    # Get the path for this user's class folder
@@ -405,15 +410,13 @@ foreach ($user in $users) {                                                     
                 # Add a tombstone entry
                 $Tombstones[$user.SamAccountName].Add($DropClass.FormattedName, (Get-Date))                      # Add the class name to this users tombstoned list and the current date
                 if ($Vebrose) { Write-Output ("Tombstoned class for: {0} in {1}" -f $user.SamAccountName,$DropClass.Name) }  # If vebrose tell you about it
-
-                IncrementStatKey "Classes Tombstoned"
             }
         }
     }
 
     # Also don't forget we have to recycle courses and handle folders that are done and not added back
     $UserTombstoneClasses = $Tombstones[$user.SamAccountName]                                               # Get the users list of tombstoned classes
-    if ($Vebrose) { Write-Output ("Checking tombstoned classes for: {0}" -f $user.SamAccountName) }                  # If veborse tell you about it
+    if ($Vebrose) { Write-Output ("Checking tombstoned classes for: {0}" -f $user.SamAccountName) }         # If veborse tell you about it
     if ($UserTombstoneClasses -ne $null) {                                                                  # Does the user have any tombstoned classes
         $UserTombstoneClasses_Clone = $UserTombstoneClasses.Clone()                                         # If so lets clone the list so we can iterate over it while removing items from the original
         foreach ($TombstoneClass in $UserTombstoneClasses_Clone.GetEnumerator()) {                          # Iterate over the cloned list  
@@ -426,8 +429,8 @@ foreach ($user in $users) {                                                     
 
                 if ($Vebrose) { Write-Output ("Removed tombstoned class for user: {0} in class {1}" -f $user.SamAccountName, $TombstoneClass.Key) } # tell you about it
 
-                # Remove from tombstones list
-                $UserTombstoneClasses.Remove($TombstoneClass.Key)                                           # Remove this class from the original (non-cloned) list
+                # Remove from tombstones list (If we're not comparing)
+                if (!$Compare) { $UserTombstoneClasses.Remove($TombstoneClass.Key) }                        # Remove this class from the original (non-cloned) list
 
                 IncrementStatKey "Tombstoned Classes Removed"
             }
@@ -452,7 +455,7 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
         $ClassAD = CreateClass $Class                                                                       # Lets create it
         Write-Output ("Creating Class: {0}" -f $Class.Name)                                                 # Tell you we're creating a class if in vebrose mode
 
-        IncrementStatKey "New AD Classes Created"
+        IncrementStatKey "New Classes Created"
     }
     else { CreateClassFolders $Class }                                                                      # If we didn't create the class we should check if the class folder exists, this function will create them if it doesnt
 
@@ -470,6 +473,10 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
                         join-path -ChildPath $Username
             if ($Tombstones.ContainsKey($Username) -and 
                         $Tombstones[$Username].ContainsKey($Class.FormattedName)) {                         # Check if the class is tombstoned for the user
+                # Increment stat and check compare
+                IncrementStatKey "Tombstoned Classes Revived"
+                if ($Compare) { break; }                                                                    # If compare mode lets kick out, no need to be hiding things
+                
                 # Unhide the folder                                                                         # If it is lets unhide it and just add the ACL back
                 $Dir = Get-Item $UserPath -Force                                                            # Force makes it pick up the hidden folder
                 $Dir.Attributes = $Dir.Attributes -band ![System.IO.FileAttributes]"hidden"                 # Remove the hidden attribute
@@ -480,8 +487,6 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
 
                 # Update user
                 if ($Vebrose) { Write-Output ("Found Tombstoned Class and User: $Username in {0}" -f $Class.FormattedName) }       # Tell someone about it
-
-                IncrementStatKey "Tombstoned Classes Revived"
             }
             elseif (!(Test-Path $UserPath)) {                                                               # we check to ensure the directory doesn't already exist (perhaps it was moved by MoveClassSection)
                 # Create User Directory
@@ -491,6 +496,8 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
                 IncrementStatKey "User Directories Created"
             }
 
+            if ($Compare) { continue; }                                                                     # Don't be adding any ACLs to things which don't exist
+            
             # Add the user ACL
             $acl = Get-ACL $UserPath                                                                        # Get the ACLS on the user directory
             $rule = CreateAccessRule $Username "FullControl" $true "Allow"                                  # Create a rule for full control by the user
@@ -503,11 +510,11 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
 Write-Output ("Classes Completed in {0} Seconds" -f ((Get-Date) - $Start).TotalSeconds)                     # How long did it takes us?
 
 # Export our tombstones
-if ($Tombstones.Count -gt 0) { Export-Clixml $TombstoneFile -InputObject $Tombstones }                      # Do we still have any tombstoned classes, if so serialize the hash table of items
-elseif (Test-Path $TombstoneFile) { rm $TombstoneFile }                                                     # If not remove the tombstone file
+if (!$Compare -and $Tombstones.Count -gt 0) { Export-Clixml $TombstoneFile -InputObject $Tombstones }       # Do we still have any tombstoned classes, if so serialize the hash table of items
+elseif (!$Compare -and (Test-Path $TombstoneFile)) { rm $TombstoneFile }                                    # If not remove the tombstone file
 
 # Inheritance Fix
-if ($DoInheritance) {                                                                                       # Should we do the inheritance fixes?
+if (!$Compare -and $DoInheritance) {                                                                        # Should we do the inheritance fixes?
     Write-Output "Doing Inheritance Fix On Top Level Folders"
     foreach ($ServerEntry in $ClassFolders.GetEnumerator()) {                                               # Loop through our top-level folders
         $Server = $ServerEntry.Value
@@ -530,7 +537,7 @@ if ($DoInheritance) {                                                           
 }
 
 # Mark the OIT File as processed
-move-item $OITFile ("Processed-{0}.txt" -f (get-date -uformat "%d-%m-%Y-%H%M%S"))                           # Rename the file so that it can be marked as processed and not accidently rerun
+move-item $OITFile ("Processed-{0}.txt" -f (get-date -uformat "%d-%m-%Y-%H%M%S")) -WhatIf:$Compare          # Rename the file so that it can be marked as processed and not accidently rerun
 
 # Output Script Information
 Write-Output ("Script Completed in {0} Seconds " -f ((Get-Date) - $Start).TotalSeconds)

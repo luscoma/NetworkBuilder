@@ -6,6 +6,10 @@ Version 3.0
 ----------------------
 - Added HTML application GUI
 - Tweaked powershell script to provide stats on what was going
+- Compare mode now fully works, no errors just good clean comparing
+- Added ability to e-mail log file
+- Legit logging now using start/stop-transcript
+
 
 ----------------------
 Version 2.0

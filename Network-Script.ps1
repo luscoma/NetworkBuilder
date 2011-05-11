@@ -27,7 +27,7 @@ param(
         [Switch]$Compare                = $false,                       # Enables compare mode which does not cause any changes
                                                                         # NOTE: This will fail currently (I believe) due to Get-Acl and Set-ACL being attempted on a non-existant folder, this will be tested in the future
         [Switch]$Vebrose                = $false,                       # Enables the vebrose mode of logging
-    [Switch]$Debug          = $false            # Enables additional debugging messages
+        [Switch]$Debug                  = $false            # Enables additional debugging messages
      )
 
 <#
@@ -117,6 +117,7 @@ function CreateClass($class)
 
     # Create the class folders
     CreateClassFolders $class
+    CheckSharedFolder $class
     $ClassAD                                                                                                                           # Return the class-group from AD
 }
 <#
@@ -163,6 +164,18 @@ function CreateClassFolders($class)
     $Class_Full_acl = CreateAccessRule $class.FormattedName "FullControl" $true "Allow"                                                # Adds the class group for full control and inheritance
     $acl.AddAccessRule($Class_Full_acl)                                                                                                # Add the rule
     Set-Acl $acl -Path $Shared_Path -WhatIf:$Compare                                                                                   # Set the ACLS
+}
+
+<#
+    CheckSharedFolder
+    Adds this class to a shared folder group if it doesn't exist
+    Will also create the folder/group if it doesn't exist
+    
+    $class      The Class Object
+#>
+function CheckSharedFolder($class)
+{
+    
 }
 
 <#
@@ -229,6 +242,13 @@ function MoveUserClassSection($user, $Dropped_Class, $Add_Class)
 function FormatClass($Class_Name)
 {
     $name = $Class_Name.Replace("_","");                                                                        # Strips a formatted name if given
+    switch($name[4])
+    {
+        '1' {$year = "1st"}
+        '2' {$year = "2nd"}
+        '3' {$year = "3rd"}
+        default { $year = ("{0}th" -f $name[4]) }
+    }
     @{                                                                                                          # Creates a new hash table
         Name = $name ;                                                                                          # Stores the unformatted name
         FormattedName = "{0}_{1}_{2}" -f $name.Substring(0,4),$name.Substring(4,4),$name.Substring(8,3) ;       # Stores the formatted name
@@ -236,7 +256,8 @@ function FormatClass($Class_Name)
         Department = $Majors[$name.Substring(0,4)] ;                                                            # Stores the Department
         UTM = "{0}_UTM" -f $Majors[$name.Substring(0,4)] ;                                                      # Stores the UTM Group
         Instructor = "{0}_{1}_{2}_FAC" -f $name.Substring(0,4),$name.Substring(4,4),$name.Substring(8,3) ;      # Stores the Instructor Group
-        Faculty = "{0} Faculty" -f $Majors[$name.Substring(0,4)];                                               # Sets the Faculty group which is Department Faculty
+        Faculty = "{0}_Faculty" -f $Majors[$name.Substring(0,4)];                                               # Sets the Faculty group which is Department Faculty
+        SharedFolder = "{0} {1} Year Shared" -f $Majors[$name.Substring(0,4)],$year ;                           # Shared Folder                                                          # The folder for that this class should be shared with
     };
 }
 

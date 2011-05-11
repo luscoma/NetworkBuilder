@@ -1,4 +1,4 @@
 # Ignores the swap file created by vim
-Network-Script.ps1~
+*.*~
 *.swp
 users*.txt

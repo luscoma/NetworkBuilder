@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>
+Network Builder
+</title>
+
+<!-- Meta Tags -->
+<meta charset="utf-8">
+<meta name="generator" content="Wufoo.com" />
+
+<!-- CSS -->
+<link rel="stylesheet" href="css/structure.css" type="text/css" />
+<link rel="stylesheet" href="css/form.css" type="text/css" />
+
+<!-- JavaScript -->
+<script type="text/javascript" src="scripts/wufoo.js"></script>
+<script type="text/javascript" src="scripts/jquery-1.5.2.min.js"></script>
+<script type="text/javascript" src="scripts/jquery.validate.min.js"></script>
+
+<!-- HTML Application -->
+<hta:application
+            ID="NetworkBuilder"
+            ApplicationName="NetworkBuilder"
+            SingleInstance="yes"
+            Icon="NetworkBuilder.ico"
+            Border="thin"
+            Scroll="auto"
+            />
+
+<!-- Scripts -->
+<script language="javascript">
+    $(document).ready( function() { 
+        // Resize Window
+        window.resizeTo(775,725); 
+
+        // Validation Setup
+        $("#mainform").validate({
+            submitHandler: handleOnSubmit,
+            rules: {
+                OITFile: "required",
+                UserPassword: "required",
+                UserExpire:{
+                    required: true,
+                    date: true
+                },
+                TombstoneFile: "required",
+                FullDomain: "required",
+                LogEmail: {
+                    required: "#NoEmail:unchecked",
+                    email: true
+                },
+				EmailServer: "required"
+            },
+            messages: {
+                OITFile: "You must select an OIT filename",
+                UserPassword: "User's default password is required",
+                UserExpire: "User expiration date is required and must be a valid date",
+                TombstoneFile: "Tombstone filename is required",
+                FullDomain: "The Full Domain is required by the script",
+                LogEmail: "An Email address is required if send email is enabled",
+				EmailServer: "An EMail server is required if send email is enabled"
+            }
+        });
+    });
+
+    $.format = function(fmt, values) {
+        /// <summary>Formats a string with the given JSON values</summary>
+        /// <param name="fmt" type="String">Format string to replace values with</param>
+        /// <param name="values" type="JSON">Values to replace in string</param>
+        /// <returns type="String" />
+
+        var str = fmt;
+        for (var field in values) {
+            var re = new RegExp("\\{" + field + "}","g");
+            str = str.replace(re,values[field]);
+        }
+
+        return str;
+    }
+
+    function handleOnSubmit(form)
+    {
+        // Collect the parameters
+        var args = {
+            file: $("#OITFile").val(),
+            userpass: $("#UserPassword").val(),
+            userexpire: $("#UserExpire").val(),
+            tombstone: $("#TombstoneFile").val(),
+            fulldomain: $("#FullDomain").val(),
+            logemail: $("#LogEmail").val() || "none@provided.net",
+			emailserver: $("#EmailServer").val() || "tigerout.auburn.edu",
+            doinheritance: $("#InheritanceFix").is(":checked"),
+            comparemode: $("#CompareMode").is(":checked"),
+            verbose: $("#VerboseMode").is(":checked"),
+            debug: $("#DebugMode").is(":checked"),
+            showstats: $("#ShowStats").is(":checked"),
+            nologging: $("#NoLogging").is(":checked"),
+			noemail: $("#NoEmail").is(":checked")
+        }
+
+        /* 
+        // Verify
+        alert(file);
+        alert(userpass);
+        alert(userexpire);
+        alert(tombstone_file);
+        alert(fulldomain);
+        alert(logemail);
+        alert(doinheritance);
+        alert(comparemode);
+        alert(verbose);
+        alert(debug);
+        alert(showstats);
+        alert(nologging);
+        */
+
+        // Disable the button while its running
+        $("#RunScriptSubmit").attr("disabled","disabled");
+
+        // Run Powershell
+        var arg_string = $.format("'{file}' '{userpass}' {userexpire} {tombstone} 7 {fulldomain} '{logemail}' '{emailserver}' -DoInheritance:${doinheritance} -Compare:${comparemode} -Vebrose:${verbose} -EnableStats:${showstats} -NoLogging:${nologging} -NoEmail:${noemail}",args);
+        RunPowershell(arg_string);
+
+        // Reenable Button
+        $("#RunScriptSubmit").removeAttr("disabled");
+
+        return false;
+    }
+</script>
+<script type="text/vbscript">
+    ' I Hate VB Script
+    ' Unfortunately Microsoft HTAs are still in the stone age and only allow vbscript for integration purposes
+    ' Hopefully someone will fix this in the future
+    Sub RunPowershell(args)
+       Dim oShell, scriptPath, appCmd, retVal, retData, scriptName
+       Set oShell  = CreateObject("WScript.Shell")
+
+       ' Build the script path
+       scriptName  = "Network-Script.ps1"
+       scriptPath  = oShell.CurrentDirectory & "\" & scriptName
+       appCmd      = "powershell -ExecutionPolicy Unrestricted """ & scriptPath & " " & args  & """"        ' powershell with unrestricted script policy then the script to run plus arguments to run
+
+       ' Run Script and Get Return Value
+       retVal      = oShell.Run(appCmd, 4, true)	   
+       If(retVal = 1) Then
+          msgbox "An Error Occurred, Please check the log file for more details", vbExclamation, "Error"
+       Else
+          msgbox "Operation Completed", vbInformation, "Return Value"
+       End If
+    End Sub
+</script>
+</head>
+
+<body id="public">
+    <div id="container">
+        <form id="mainform" class="wufoo" method="post">
+            <h2>Network Builder Parameters</h2>
+            <hr/>
+
+            <ul>
+                <li id="foli1">
+                    <label class="desc" id="title1" for="OITFile">Required Parameters</label>
+                    <span class="full">
+                        <input id="OITFile" name="OITFile" type="file" class="field text oitfile" tabindex="1" style="width:100%"/>
+                        <label for="OITFile">OIT File</label>
+                    </span>
+                </li>
+                <li id="foli3" class="complex">
+                    <label class="desc" for="UserPassword">Optional Parameters</label>
+                    <div>
+                        <span class="left">
+                            <input id="UserPassword" name="UserPassword" type="password" class="field text addr" value="tigers" tabindex="3" />
+                            <label for="UserPassword">Default User Password</label>
+                        </span>
+                        <span class="right">
+                            <input id="UserExpire" name="UserExpire" type="text" class="field text addr" value="5/11/2011" tabindex="4" />
+                            <label for="UserExpire">User Expiration Date</label>
+                        </span>
+                        <span class="clear left">
+                            <input id="TombstoneFile" name="TombstoneFile" type="text" class="field text addr" value="tombstone.xml" tabindex="5"/>
+                            <label for="TombstoneFile">Tombstone File</label>
+                        </span>
+                        <span class="right">
+                            <input id="FullDomain" name="FullDomain" type="text" class="field text addr" value="cadcit.auburn.edu" tabindex="6"/>
+                            <label for="FullDomain">Full Domain</label>
+                        </span>
+                    </div>
+                </li>
+                <li id="foli9" class="complex">
+                    <label class="desc" id="title9" for="LogEmail">Email For Log File</label>
+                    <div>
+					    <span class="left">
+                            <input id="LogEmail" name="LogEmail" type="email" spellcheck="false" class="field addr text medium" value="davis51@auburn.edu" maxlength="150" tabindex="9"/>
+							<label for="LogEmail">E-Mail Address</label>
+					    </span>
+						<span class="right">
+                            <input id="EmailServer" name="EmailServer" type="email" spellcheck="false" class="field addr text medium" value="tigerout.auburn.edu" maxlength="150" tabindex="10"/>
+							<label for="EmailServer">E-Mail Server</label>
+					    </span>
+                    </div>
+                </li>
+                <li id="foli11" class="threeColumns">
+                    <fieldset>
+                        <legend id="title11" class="desc" style="padding-top: 25px">Which days can you volunteer?</legend>
+                        <div>
+                            <span>
+                                <input id="InheritanceFix" name="InheritanceFix" type="checkbox" class="field checkbox" value="InheritanceFix" tabindex="11"/>
+                                <label class="choice" for="InheritanceFix">Inheritance Fix</label>
+                            </span>
+                            <span>
+                                <input id="CompareMode" name="CompareMode" type="checkbox" class="field checkbox" value="CompareMode" tabindex="12"/>
+                                <label class="choice" for="CompareMode">Compare Mode</label>
+                            </span>
+                            <span>
+                                <input id="VerboseMode" name="VerboseMode" type="checkbox" class="field checkbox" value="VerboseMode" tabindex="13"/>
+                                <label class="choice" for="VerboseMode">Verbose Mode</label>
+                            </span>
+                            <span>
+                                <input id="ShowStats" name="ShowStats" type="checkbox" class="field checkbox" value="ShowStats" tabindex="14" checked/>
+                                <label class="choice" for="ShowStats">Show Stats</label>
+                            </span>
+                            <span>
+                                <input id="NoLogging" name="NoLogging" type="checkbox" class="field checkbox" value="NoLogging" tabindex="15"/>
+                                <label class="choice" for="NoLogging">No Logging</label>
+                            </span>
+							<span>
+                                <input id="NoEmail" name="NoEmail" type="checkbox" class="field checkbox" value="NoEmail" tabindex="16"/>
+                                <label class="choice" for="NoEmail">No Email</label>
+                            </span>
+                        </div>
+                    </fieldset>
+                </li>
+                <li class="buttons ">
+                    <div>
+                        <input id="RunScriptSubmit" name="saveForm" class="btTxt submit" type="submit" value="Run Network Builder"/>
+                    </div>
+                </li>
+            </ul>
+        </form>
+    </div><!--container-->
+    <img id="bottom" src="images/bottom.png" alt="" />
+    </body>
+</html>

@@ -62,22 +62,27 @@ $UserPassword = $UserPasswordString |                                   # We con
 #>
 $Majors = @{
     # Architecture
+    "PARC" = "ARCH";
     "ARCH" = "ARCH";
     "ARIA" = "ARCH";
+    "PLND" = "ARCH";    
     "LAND" = "ARCH";
-    "PLND" = "ARCH";
     "CPLN" = "ARCH";
-    "PARC" = "ARCH";
 
     # Building Science
-    "PBSC" = "BSCI";
     "BSCI" = "BSCI";
+    "PBSC" = "BSCI";
 
     # Industrial Design
-    "PIND" = "INDD";
     "INDD" = "INDD";
     "GDES" = "INDD";
+    "PGDE" = "INDD";
+    "PIND" = "INDD";
     "PATG" = "INDD";
+    "ENVD" = "INDD";
+    
+    # Design Build
+    "DBLD" = "DBLD";
 
     # College of Architecture, Design, and Construction
     "CADC" = "CADC";
@@ -92,6 +97,7 @@ $ClassFolders = @{
     "ARCH" = "\\cadc12\ARCH_Classes";
     "BSCI" = "\\cadc13\BSCI_Classes";
     "INDD" = "\\cadc14\INDD_Classes";
+    "DBLD" = "\\cadc15\DBLD_Classes";
     "CADC" = "\\cadc16\CADC\CADC_Classes";
 };
 
@@ -187,7 +193,35 @@ function CreateClassFolders($class)
 #>
 function CheckSharedFolder($class)
 {
+    # Check if the group exists in the AD and if our class is not in there add us to it
+    $SharedName = $class.SharedName
+    $LDAP_OU = "OU={0},{1}" -f $class.Department,$LDAP   
+    $GroupAD = Get-ADGroup -Filter { name -eq $SharedName } -SearchBase "OU=Groups,$LDAP_OU"
+    if ($GroupAD -eq $null) {
+        $GroupAD = New-ADGroup $SharedName -Path "OU=Groups,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru
+    }
     
+    # Ensure this class is a member of the group
+    $ClassName = $class.FormattedName
+    $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Groups,$LDAP_OU"                 # This should never be null since we called createclass first            
+    Add-ADGroupMember $GroupAD -members $ClassAD -WhatIf:$Compare   
+
+    # Check if the folder exists
+    $Shared_Path = join-path $ClassFolders[$class.Department] -ChildPath $SharedName                        # Build the path for this folder
+    if (!(test-path $Shared_Path) -and !$Compare)                                                           # If the folder doesn't exist add it
+    { 
+        New-Item $Shared_Path -type directory -WhatIf:$Compare | out-null                                   # Create the folder       
+        
+        # Modify the ACL List
+        $acl = Get-ACL $Shared_Path                                                                         # Get the ACL LIST
+        $UTM_acl = CreateAccessRule $class.UTM "FullControl" $true "Allow"                                  # Adds the UTM user as full control and for inheritance
+        $SYS_acl = CreateAccessRule "SYSTEM" "FullControl" $true "Allow" $true                              # Adds the SYSTEM as full control and for inheritance
+        $Shared_acl = CreateAccessRule $SharedName "Modify" $false "Allow"                                  # Sets the class group for Read And Execute but no inheritance
+        $acl.AddAccessRule($UTM_acl)                                                                                                       # Add the rules
+        $acl.AddAccessRule($SYS_acl)
+        $acl.AddAccessRule($Shared_acl)
+        Set-Acl $acl -Path $Shared_Path -WhatIf:$Compare 
+    }           
 }
 
 <#
@@ -269,7 +303,7 @@ function FormatClass($Class_Name)
         UTM = "{0}_UTM" -f $Majors[$name.Substring(0,4)] ;                                                      # Stores the UTM Group
         Instructor = "{0}_{1}_{2}_FAC" -f $name.Substring(0,4),$name.Substring(4,4),$name.Substring(8,3) ;      # Stores the Instructor Group
         Faculty = "{0}_Faculty" -f $Majors[$name.Substring(0,4)];                                               # Sets the Faculty group which is Department Faculty
-        SharedFolder = "{0} {1} Year Shared" -f $Majors[$name.Substring(0,4)],$year ;                           # Shared Folder                                                          # The folder for that this class should be shared with
+        SharedName = "{0} {1} Year Shared" -f $Majors[$name.Substring(0,4)],$year ;                           # Shared Folder                                                          # The folder for that this class should be shared with
     };
 }
 <#

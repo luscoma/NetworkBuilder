@@ -94,11 +94,11 @@ $Majors = @{
     Each class in that department will be created under this folder.
 #>
 $ClassFolders = @{
-    "ARCH" = "\\cadc12\ARCH_Classes";
-    "BSCI" = "\\cadc13\BSCI_Classes";
-    "INDD" = "\\cadc14\INDD_Classes";
-    "DBLD" = "\\cadc15\DBLD_Classes";
-    "CADC" = "\\cadc16\CADC\CADC_Classes";
+    "ARCH" = "\\localhost\share\ARCH_Classes";
+    "BSCI" = "\\localhost\share\BSCI_Classes";
+    "INDD" = "\\localhost\share\INDD_Classes";
+    "DBLD" = "\\localhost\share\DBLD_Classes";
+    "CADC" = "\\localhost\share\CADC_Classes";
 };
 
 <#
@@ -203,7 +203,7 @@ function CheckSharedFolder($class)
     
     # Ensure this class is a member of the group
     $ClassName = $class.FormattedName
-    $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Groups,$LDAP_OU"                 # This should never be null since we called createclass first            
+    $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Classes,$LDAP_OU"                 # This should never be null since we called createclass first            
     Add-ADGroupMember $GroupAD -members $ClassAD -WhatIf:$Compare   
 
     # Check if the folder exists
@@ -323,7 +323,7 @@ function IncrementStatKey($Key)
 trap {
     Write-Output "Error Occurred: $_"; 
     Write-Output "Terminating Execution";
-    $_.Message | Clip
+	$_
 
 	if ($SendingEmail -or $Compare -eq $true) { continue }    # In non-compare mode if a serious error occurres we dump
     else { Exit 1 }                                          # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it

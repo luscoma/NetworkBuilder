@@ -94,11 +94,11 @@ $Majors = @{
     Each class in that department will be created under this folder.
 #>
 $ClassFolders = @{
-    "ARCH" = "\\localhost\share\ARCH_Classes";
-    "BSCI" = "\\localhost\share\BSCI_Classes";
-    "INDD" = "\\localhost\share\INDD_Classes";
-    "DBLD" = "\\localhost\share\DBLD_Classes";
-    "CADC" = "\\localhost\share\CADC_Classes";
+    "ARCH" = "\\cadc12\ARCH_Classes";
+    "BSCI" = "\\cadc13\BSCI_Classes";
+    "INDD" = "\\cadc14\INDD_Classes";
+    "DBLD" = "\\cadc15\DBLD_Classes";
+    "CADC" = "\\cadc16\CADC\CADC_Classes";
 };
 
 <#

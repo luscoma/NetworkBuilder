@@ -126,9 +126,11 @@ function CreateClass($class)
     $InstructorAD = New-ADGroup $class.Instructor -Path "OU=Instructors,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru      # Create the faculty group
 
     # Add initial groups
-    if ($Vebrose) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              # The Debug output for the faculty ad and instructor ad group
-    Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                               # Adds the faculty group to the class instructor group
-    Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                                 # Adds the instructor group to the class group
+    if ($Vebrose) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              				   # The Debug output for the faculty ad and instructor ad group
+	if (!$Compare) { 
+		Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                           # Adds the faculty group to the class instructor group
+		Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                             # Adds the instructor group to the class group
+	}
 
     # Create the class folders
     CreateClassFolders $class
@@ -201,9 +203,11 @@ function CheckSharedFolder($class)
         $GroupAD = New-ADGroup $SharedName -Path "OU=Groups,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru
     }
     
+	if ($Compare) { return }																				# If compare kick out
+	
     # Ensure this class is a member of the group
     $ClassName = $class.FormattedName
-    $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Classes,$LDAP_OU"                 # This should never be null since we called createclass first            
+    $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Classes,$LDAP_OU"                # This should never be null since we called createclass first            
     Add-ADGroupMember $GroupAD -members $ClassAD -WhatIf:$Compare   
 
     # Check if the folder exists
@@ -521,7 +525,7 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
             # Get AD User and add to group
             $UserAD = Get-ADUser -Filter { name -eq $Username }                                             # Gets the AD User (no search-base because this class may not be in  the users major)
             if ($UserAD -eq $null) { continue; }                                                            # If the user doesn't exist lets continue past it
-            Add-ADGroupMember $ClassAd -members $UserAD -WhatIf:$Compare                                    # Adds the user to the class group
+            if (!$Compare) { Add-ADGroupMember $ClassAd -members $UserAD -WhatIf:$Compare }                 # Adds the user to the class group
 
             # Check If Tombstoned 
             $UserPath = join-path $ClassFolders[$Class.Department] $Class.FormattedName |                   # Get the users path

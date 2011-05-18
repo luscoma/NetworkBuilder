@@ -617,7 +617,7 @@ if (!$NoEmail) {
                                  ("The Network Builder has completed and been run on {0}.  Please check the log for details" -f (get-date))
     if (!$NoLogging) {
         stop-transcript
-        $attachment = New-Object System.Net.Mail.Attachment –ArgumentList ("{0}\builder-{1}.log" -f ((get-location).Path),(get-date -uformat "%m-%d-%Y"))
+        $attachment = New-Object System.Net.Mail.Attachment -ArgumentList ("{0}\builder-{1}.log" -f ((get-location).Path),(get-date -uformat "%m-%d-%Y"))
         $message.Attachments.Add($attachment)
     }
 

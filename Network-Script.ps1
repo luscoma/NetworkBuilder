@@ -2,7 +2,7 @@
     Network-Script
     This script builds the CADC Network
     Written by Alex Lusco
-    http://www.github.com/luscoma/NetworkBuilder (private repo)
+    http://www.github.com/luscoma/NetworkBuilder
 
     To Run A Unsigned Script
     Set-ExecutionPolicy Unrestricted
@@ -24,13 +24,13 @@ param(
         [string]$FullDomain             = "test.local",                 # The full domain suffix, this is parsed for the LDAP suffix and the domain prefix
         [string]$AdminEmail             = "davis51@auburn.edu",         # The Email to email the log file to upon completion
         [string]$EmailServer            = "tigerout.auburn.edu",        # The SMTP server to send the e-mail
-		
+
         [Switch]$DoInheritance          = $false,                       # Enables or disables the inhertance fix for top-level folders
         [Switch]$Compare                = $false,                       # Enables compare mode which does not cause any changes
         [Switch]$Vebrose                = $false,                       # Enables the vebrose mode of logging
         [Switch]$EnableStats            = $true,                        # Prints some stats at the end of the script of what was or would be cahnged
         [Switch]$NoLogging              = $false,                       # Disables e-mailing of the log file
-		[Switch]$NoEmail                = $false                        # Disables e-mailing of the log file
+        [Switch]$NoEmail                = $false                        # Disables e-mailing of the log file
      )
 
 # Enable logging unless told not to
@@ -65,13 +65,14 @@ $Majors = @{
     "PARC" = "ARCH";
     "ARCH" = "ARCH";
     "ARIA" = "ARCH";
-    "PLND" = "ARCH";    
+    "PLND" = "ARCH";
     "LAND" = "ARCH";
     "CPLN" = "ARCH";
 
     # Building Science
     "BSCI" = "BSCI";
     "PBSC" = "BSCI";
+    "BSCC" = "BSCI";
 
     # Industrial Design
     "INDD" = "INDD";
@@ -80,7 +81,7 @@ $Majors = @{
     "PIND" = "INDD";
     "PATG" = "INDD";
     "ENVD" = "INDD";
-    
+
     # Design Build
     "DBLD" = "DBLD";
 
@@ -126,11 +127,11 @@ function CreateClass($class)
     $InstructorAD = New-ADGroup $class.Instructor -Path "OU=Instructors,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru      # Create the faculty group
 
     # Add initial groups
-    if ($Vebrose) { Write-Output "AD Groups" $FacultyAD $InstructorAD }                                              				   # The Debug output for the faculty ad and instructor ad group
-	if (!$Compare) { 
-		Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                           # Adds the faculty group to the class instructor group
-		Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                             # Adds the instructor group to the class group
-	}
+    if (!$Compare) {
+        if ($Vebrose) { Write-Host "AD Groups" $FacultyAD $InstructorAD }                                                              # The Debug output for the faculty ad and instructor ad group
+        Add-ADGroupMember $FacultyAD -members $InstructorAD -WhatIf:$Compare                                                           # Adds the faculty group to the class instructor group
+        Add-ADGroupMember $ClassAD -members $InstructorAD -WhatIf:$Compare                                                             # Adds the instructor group to the class group
+    }
 
     # Create the class folders
     CreateClassFolders $class
@@ -160,7 +161,7 @@ function CreateClassFolders($class)
                                                                                                                                        # These our piped to null so they don't echo OK to the console (which you can't turn off...)
     # Check Compare Mode, the rest of this stuff will fail (the access rule stuff specifically)
     if ($Compare) { return }
-    
+
     # Set ACLS For Main Path
     $acl = Get-Acl $Class_Path                                                                                                         # Retrieves the ACLs on the class folder
     $UTM_acl = CreateAccessRule $class.UTM "FullControl" $true "Allow"                                                                 # Adds the UTM user as full control and for inheritance
@@ -190,7 +191,7 @@ function CreateClassFolders($class)
     CheckSharedFolder
     Adds this class to a shared folder group if it doesn't exist
     Will also create the folder/group if it doesn't exist
-    
+
     $class      The Class Object
 #>
 function CheckSharedFolder($class)
@@ -202,9 +203,9 @@ function CheckSharedFolder($class)
     if ($GroupAD -eq $null) {
         $GroupAD = New-ADGroup $SharedName -Path "OU=Groups,$LDAP_OU" -GroupScope "global" -WhatIf:$Compare -PassThru
     }
-    
-	if ($Compare) { return }																				# If compare kick out
-	
+
+    if ($Compare) { return }                                                                                # If compare kick out
+
     # Ensure this class is a member of the group
     $ClassName = $class.FormattedName
     $ClassAD = Get-ADGroup -Filter { name -eq $ClassName } -SearchBase "OU=Classes,$LDAP_OU"                # This should never be null since we called createclass first            
@@ -213,9 +214,9 @@ function CheckSharedFolder($class)
     # Check if the folder exists
     $Shared_Path = join-path $ClassFolders[$class.Department] -ChildPath $SharedName                        # Build the path for this folder
     if (!(test-path $Shared_Path) -and !$Compare)                                                           # If the folder doesn't exist add it
-    { 
+    {
         New-Item $Shared_Path -type directory -WhatIf:$Compare | out-null                                   # Create the folder       
-        
+
         # Modify the ACL List
         $acl = Get-ACL $Shared_Path                                                                         # Get the ACL LIST
         $UTM_acl = CreateAccessRule $class.UTM "FullControl" $true "Allow"                                  # Adds the UTM user as full control and for inheritance
@@ -225,7 +226,7 @@ function CheckSharedFolder($class)
         $acl.AddAccessRule($SYS_acl)
         $acl.AddAccessRule($Shared_acl)
         Set-Acl $acl -Path $Shared_Path -WhatIf:$Compare 
-    }           
+    }
 }
 
 <#
@@ -327,9 +328,9 @@ function IncrementStatKey($Key)
 trap {
     Write-Output "Error Occurred: $_"; 
     Write-Output "Terminating Execution";
-	$_
+    $_
 
-	if ($SendingEmail -or $Compare -eq $true) { continue }    # In non-compare mode if a serious error occurres we dump
+    if ($SendingEmail -or $Compare -eq $true) { continue }    # In non-compare mode if a serious error occurres we dump
     else { Exit 1 }                                          # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it
 }
 
@@ -382,13 +383,12 @@ foreach ($user in $users) {                                                     
     $Class_Names = $MyClasses | % { $_.FormattedName }
 
     # Here we build the LDAP_OU and Check if this user is someone we should proceed with or not
-    if (!$Majors.ContainsKey($user.Major) -and $MyClasses.Count -eq 0) {                                    # The user is not declared one of our majors, we need to see if they are takingany of our classes
+    if (!$Majors.ContainsKey($user.Major) -and ($MyClasses -eq $null -or $MyClasses.Count -eq $null -or $MyClasses.Count -eq 0)) {                                    # The user is not declared one of our majors, we need to see if they are takingany of our classes
         continue                                                                                            # Nor our they in any of our clases, ditch the freaks :)
     }
     else { IncrementStatKey ("{0} Students" -f $user.Department) }                                               # If the user is in our majors then we make sure we note this in our statistics
     $LDAP_OU = "OU={0},{1}" -f $user.Department,$LDAP                                                       # We use the $user.Department to determine where to store them
     $username = $user.SamAccountName                                                                        # Stupid fix for powershell AD Filters (can't access a property of PSCustomObject directly)
-
 
     # Here we either create the user or retrieve the User AD object
     $UserAD = Get-ADUser -Filter { Name -eq $username }                                                     # Attempt to retreive the user from the ad
@@ -404,12 +404,12 @@ foreach ($user in $users) {                                                     
                                     -AccountExpirationDate $UserExpireDate -Path "OU=Students,$LDAP_OU" `
                                     -WhatIf:$Compare -PassThru                                              # Create the AD Object with the given properties
 
-        IncrementStatKey ("New {0} Students" -f $user.Department)                                                # Adds a new user to our statistic count for this major
+        IncrementStatKey ("New {0} Students" -f $user.Department)                                           # Adds a new user to our statistic count for this major
         Write-Output ("Creating a new user: {0}" -f $user.SamAccountName)
     }
 
     # Get Groups and handle dropped classes
-    $GroupsAD = Get-ADPrincipalGroupMembership $UserAD                                                      # Retrieves the user's groups
+    if (!$Compare) { $GroupsAD = Get-ADPrincipalGroupMembership $UserAD }                                   # Retrieves the user's groups
     $Group_Names = $GroupsAD | select -expand name                                                          # Retreives the names of all groups this user is a member of
 
     # Store list of classes user should add (aka those which were enrolled but are not currently a member)
@@ -445,7 +445,7 @@ foreach ($user in $users) {                                                     
             else {                                                                                          # If its not a section move we must tombstone the class            
                 IncrementStatKey "Classes Added to Tombstone"
                 if ($Compare) { continue; }                                                                 # If we're comparing then we don't actually need to do anything
-            
+
                 # Remove the ACL
                 $UserPath = join-path $ClassFolders[$DropClass.Department] -ChildPath `
                                             ("{0}\{1}" -f $DropClass.FormattedName,$user.SamAccountName)    # Get the path for this user's class folder
@@ -525,7 +525,7 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
             # Get AD User and add to group
             $UserAD = Get-ADUser -Filter { name -eq $Username }                                             # Gets the AD User (no search-base because this class may not be in  the users major)
             if ($UserAD -eq $null) { continue; }                                                            # If the user doesn't exist lets continue past it
-            if (!$Compare) { Add-ADGroupMember $ClassAd -members $UserAD -WhatIf:$Compare }                 # Adds the user to the class group
+            if (!$Compare) { Add-ADPrincipalGroupMembership $UserAD -MemberOf $ClassAD -WhatIf:$Compare }                 # Adds the user to the class group
 
             # Check If Tombstoned 
             $UserPath = join-path $ClassFolders[$Class.Department] $Class.FormattedName |                   # Get the users path
@@ -535,7 +535,7 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
                 # Increment stat and check compare
                 IncrementStatKey "Tombstoned Classes Revived"
                 if ($Compare) { break; }                                                                    # If compare mode lets kick out, no need to be hiding things
-                
+
                 # Unhide the folder                                                                         # If it is lets unhide it and just add the ACL back
                 $Dir = Get-Item $UserPath -Force                                                            # Force makes it pick up the hidden folder
                 $Dir.Attributes = $Dir.Attributes -band ![System.IO.FileAttributes]"hidden"                 # Remove the hidden attribute
@@ -556,7 +556,7 @@ foreach ($ClassEntry in $Class_Users.GetEnumerator()) {                         
             }
 
             if ($Compare) { continue; }                                                                     # Don't be adding any ACLs to things which don't exist
-            
+
             # Add the user ACL
             $acl = Get-ACL $UserPath                                                                        # Get the ACLS on the user directory
             $rule = CreateAccessRule $Username "FullControl" $true "Allow"                                  # Create a rule for full control by the user
@@ -596,7 +596,12 @@ if (!$Compare -and $DoInheritance) {                                            
 }
 
 # Mark the OIT File as processed
-move-item $OITFile ("Processed-{0}.txt" -f (get-date -uformat "%d-%m-%Y-%H%M%S")) -WhatIf:$Compare          # Rename the file so that it can be marked as processed and not accidently rerun
+$NEWFile = ("Processed-{0}.txt" -f (get-date -uformat "%d-%m-%Y-%H%M%S"))                                   # Generate the file name
+move-item $OITFile $NEWFile  -WhatIf:$Compare                                                               # Rename the file so that it can be marked as processed and not accidently rerun
+if (!$Compare) {                                                                                            # When in compare mode don't do this because the file doesn't exist
+    $file = Get-Item $NEWFile                                                                               # Get the new processed file
+    $file.Attributes = $UserDir.Attributes -bor [System.IO.FileAttributes]"readonly"                        # Add Readonly
+}
 
 # Output Script Information
 Write-Output ("Script Completed in {0} Seconds " -f ((Get-Date) - $Start).TotalSeconds)
@@ -608,20 +613,20 @@ if ($EnableStats) { $Stats }
 if (!$NoEmail) {
     $SendingEmail = $true                                                                                   # This is a flag so the trap statement doesn't cause an error just because the send fails
     $message = new-object System.Net.Mail.MailMessage "networkbuilder@cadc.auburn.edu", $AdminEmail, 
-	                             "The Network Builder Has Completed", 
-								 ("The Network Builder has completed and been run on {0}.  Please check the log for details" -f (get-date))
-	if (!$NoLogging) {
-	    stop-transcript
-	    $attachment = New-Object System.Net.Mail.Attachment –ArgumentList ("{0}\builder-{1}.log" -f ((get-location).Path),(get-date -uformat "%m-%d-%Y")), "text/plain"
-		$message.Attachments.Add($attachment)
-	}
-	
-	# Send the email
-    $smtp = new-object System.Net.Mail.SmtpClient $EmailServer
-	try { 
-	    $smtp.Send($message) 
-		Write-Out ("E-Mail Sent to {0}" -f $AdminEmail)
+                                 "The Network Builder Has Completed", 
+                                 ("The Network Builder has completed and been run on {0}.  Please check the log for details" -f (get-date))
+    if (!$NoLogging) {
+        stop-transcript
+        $attachment = New-Object System.Net.Mail.Attachment –ArgumentList ("{0}\builder-{1}.log" -f ((get-location).Path),(get-date -uformat "%m-%d-%Y"))
+        $message.Attachments.Add($attachment)
     }
-	catch { Write-Out "Email Sending Failed" }
+
+    # Send the email
+    $smtp = new-object System.Net.Mail.SmtpClient $EmailServer
+    try { 
+        $smtp.Send($message) 
+        Write-Out ("E-Mail Sent to {0}" -f $AdminEmail)
+    }
+    catch { Write-Out "Email Sending Failed" }
 }
 Exit 0

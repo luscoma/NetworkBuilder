@@ -402,7 +402,7 @@ foreach ($user in $users) {                                                     
                                     -UserPrincipalName ("{0}@{1}" -f $user.SamAccountName,$FullDomain) `
                                     -EmailAddress ("{0}@auburn.edu" -f $user.SamAccountName) `
                                     -AccountExpirationDate $UserExpireDate -Path "OU=Students,$LDAP_OU" `
-                                    -WhatIf:$Compare -PassThru                                              # Create the AD Object with the given properties
+                                    -ChangePasswordAtLogon:$true -WhatIf:$Compare -PassThru                 # Create the AD Object with the given properties
 
         IncrementStatKey ("New {0} Students" -f $user.Department)                                           # Adds a new user to our statistic count for this major
         Write-Output ("Creating a new user: {0}" -f $user.SamAccountName)

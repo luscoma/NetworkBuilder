@@ -482,9 +482,11 @@ foreach ($user in $users) {                                                     
             $diff = (Get-Date) - $TombstoneClass.Value                                                      # get the time difference from when the class was tombstoned until now
             if ($diff.TotalDays -gt $TombstoneDays) {                                                       # If the difference is greater than the number of days required
                 $ClassObject = FormatClass $TombstoneClass.Key                                              # Create a class object for this tombstoned class
-                join-path $ClassFolders[$ClassObject.Department] -ChildPath $TombstoneClass.Key |           # We get the path to the users folder
-                        join-path -ChildPath $user.SamAccountName | 
+                if (!$Compare) {
+                    join-path $ClassFolders[$ClassObject.Department] -ChildPath $TombstoneClass.Key |       # We get the path to the users folder
+                        join-path -ChildPath $user.SamAccountName |
                         Remove-Item -Force                                                                  # And remove the item (-Force is required becaues it is a hidden folder)
+                }
 
                 if ($Vebrose) { Write-Output ("Removed tombstoned class for user: {0} in class {1}" -f $user.SamAccountName, $TombstoneClass.Key) } # tell you about it
 

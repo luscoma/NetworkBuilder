@@ -332,9 +332,8 @@ function IncrementStatKey($Key)
 
 # Traps Any Errors
 trap {
-    Write-Output "Error Occurred: $_"; 
-    Write-Output "Terminating Execution";
-    $_
+    Write-Error "An Exception Occurred";
+    Write-Error $_
 
     if ($SendingEmail -or $Compare -eq $true) { continue }    # In non-compare mode if a serious error occurres we dump
     else { Exit 1 }                                          # if we're in comparison mode the Get-ACL will fail if the folder doesn't exist so we just truck through it

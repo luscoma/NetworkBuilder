@@ -292,6 +292,12 @@ function MoveUserClassSection($user, $Dropped_Class, $Add_Class)
 #>
 function FormatClass($Class_Name)
 {
+    if ($Class_Name.length -ne 11) {
+        # We return nothing, this will be a null entry
+        Write-Error -Message ("Invalid Class Name, Failed To Format {0}, it will be skipped." -f $Class_Name) -Category InvalidData
+        return
+    }
+
     $name = $Class_Name.Replace("_","");                                                                        # Strips a formatted name if given
     switch($name[4])
     {

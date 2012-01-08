@@ -65,7 +65,6 @@ $Majors = @{
     "PARC" = "ARCH";
     "ARCH" = "ARCH";
     "ARIA" = "ARCH";
-    "PLND" = "ARCH";
     "LAND" = "ARCH";
     "CPLN" = "ARCH";
 
@@ -80,8 +79,11 @@ $Majors = @{
     "PGDE" = "INDD";
     "PIND" = "INDD";
     "PATG" = "INDD";
-    "ENVD" = "INDD";
-
+	
+	# Environmental Design
+    "ENVD" = "ENVD";
+	"PLND" = "ENVD";
+	
     # Design Build
     "DBLD" = "DBLD";
 
@@ -95,11 +97,12 @@ $Majors = @{
     Each class in that department will be created under this folder.
 #>
 $ClassFolders = @{
-    "ARCH" = "\\cadc12\ARCH_Classes";
+    "ARCH" = "\\cadc12\APLA_Classes";
     "BSCI" = "\\cadc13\BSCI_Classes";
-    "INDD" = "\\cadc14\INDD_Classes";
-    "DBLD" = "\\cadc15\DBLD_Classes";
-    "CADC" = "\\cadc16\CADC\CADC_Classes";
+	"ENVD" = "\\cadc10\ENVD_Classes";
+    "INDD" = "\\cadc14\DIGD_Classes";
+    "DBLD" = "\\cadc10\DBLD_Classes";
+    "CADC" = "\\cadc10\CADC_Classes";
 };
 
 <#
